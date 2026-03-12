@@ -54,6 +54,8 @@
       <g id="g-lines"></g>
       <g id="g-preview"></g>
       <g id="g-pts"></g>
+      <!-- Cursor coords display -->
+      <text id="g-cursor-txt" x="5" y="670" font-size="9" font-family="monospace" fill="white" stroke="#000" stroke-width="2" paint-order="stroke" style="pointer-events:none"></text>
     </svg>
   </div>
   <div id="panel">
@@ -185,12 +187,32 @@ function renderSaved() {
     const poly = saved[r.id]
     if (!poly || poly.length < 3) return
     const color = COLORS[r.id]
+    const isActive = r.id === activeId
+
     g.appendChild(el('polygon', {
       points: poly.map(p => p.join(',')).join(' '),
-      fill: color + '28',
+      fill: color + '40',
       stroke: color,
-      'stroke-width': '1',
+      'stroke-width': '1.5',
     }))
+
+    // Label at centroid
+    const [cx, cy] = centroid(poly)
+    const txt = document.createElementNS(NS, 'text')
+    txt.setAttribute('x', cx)
+    txt.setAttribute('y', cy)
+    txt.setAttribute('text-anchor', 'middle')
+    txt.setAttribute('dominant-baseline', 'middle')
+    txt.setAttribute('font-size', '9')
+    txt.setAttribute('font-weight', 'bold')
+    txt.setAttribute('font-family', 'system-ui, sans-serif')
+    txt.setAttribute('fill', 'white')
+    txt.setAttribute('stroke', '#000')
+    txt.setAttribute('stroke-width', '2.5')
+    txt.setAttribute('paint-order', 'stroke')
+    txt.setAttribute('style', 'pointer-events:none')
+    txt.textContent = r.name
+    g.appendChild(txt)
   })
 }
 
@@ -371,11 +393,15 @@ svg.addEventListener('dblclick', e => {
 
 svg.addEventListener('mousemove', e => {
   cursor = svgCoords(e)
+  const ctxt = document.getElementById('g-cursor-txt')
+  if (ctxt) ctxt.textContent = `x:${cursor[0]}  y:${cursor[1]}`
   if (activeId && pts.length > 0) renderPreview()
 })
 
 svg.addEventListener('mouseleave', () => {
   cursor = null
+  const ctxt = document.getElementById('g-cursor-txt')
+  if (ctxt) ctxt.textContent = ''
   renderPreview()
 })
 

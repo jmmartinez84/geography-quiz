@@ -23,7 +23,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg}'],
+        globIgnores: ['**/region-editor.html', '**/espana.jpg'],
+        navigateFallbackDenylist: [/^\/region-editor\.html/],
       },
     }),
   ],

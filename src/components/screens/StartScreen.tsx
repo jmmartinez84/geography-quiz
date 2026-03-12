@@ -24,7 +24,7 @@ export function StartScreen({ onStart }: Props) {
           <span className="text-2xl">🔍</span>
           <span><strong className="text-white">Identifica</strong> — elige el nombre de la región destacada</span>
         </div>
-        <div className="text-slate-500 mt-1">24 preguntas · 12 cordilleras</div>
+        <div className="text-slate-500 mt-1">26 preguntas · 13 cordilleras</div>
       </div>
 
       <button

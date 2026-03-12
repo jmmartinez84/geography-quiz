@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editor de Regiones – Cordilleras</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    header { background: #1e293b; padding: 8px 16px; font-size: 13px; font-weight: 700; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    header span { color: #64748b; font-weight: 400; font-size: 11px; }
+    #main { display: flex; flex: 1; overflow: hidden; }
+
+    /* Map area */
+    #map-wrap { flex: 1; display: flex; align-items: center; justify-content: center; background: #020617; padding: 6px; overflow: hidden; }
+    #svg { max-width: 100%; max-height: 100%; cursor: crosshair; display: block; }
+
+    /* Sidebar */
+    #panel { width: 260px; display: flex; flex-direction: column; border-left: 1px solid #334155; overflow: hidden; flex-shrink: 0; }
+    #panel-head { padding: 8px 10px; font-size: 11px; color: #64748b; border-bottom: 1px solid #334155; line-height: 1.5; flex-shrink: 0; }
+    #panel-head b { color: #94a3b8; }
+    #range-list { flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 3px; }
+    .rbtn { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 5px 8px; border-radius: 5px; cursor: pointer; text-align: left; font-size: 11px; font-family: inherit; width: 100%; display: flex; align-items: center; gap: 6px; transition: background 0.1s; }
+    .rbtn:hover { background: #334155; }
+    .rbtn.active { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+    .rbtn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .rbtn .check { margin-left: auto; font-size: 10px; color: #22c55e; }
+
+    #bottom { padding: 8px; border-top: 1px solid #334155; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    #status { font-size: 11px; color: #94a3b8; min-height: 16px; }
+    .row { display: flex; gap: 5px; }
+    button { padding: 5px 9px; border-radius: 4px; border: none; cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit; flex: 1; transition: opacity 0.1s; }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.35; cursor: default; }
+    .r { background: #dc2626; color: #fff; }
+    .b { background: #2563eb; color: #fff; }
+    .g { background: #16a34a; color: #fff; }
+    .y { background: #d97706; color: #fff; }
+
+    #output { background: #020617; border: 1px solid #334155; border-radius: 4px; padding: 7px; font-family: monospace; font-size: 9.5px; color: #86efac; max-height: 120px; overflow-y: auto; white-space: pre; display: none; }
+    #coords-display { background: #1e293b; border: 1px solid #334155; border-radius: 4px; padding: 5px 7px; font-family: monospace; font-size: 9px; color: #7dd3fc; min-height: 28px; max-height: 60px; overflow-y: auto; line-height: 1.6; word-break: break-all; }
+  </style>
+</head>
+<body>
+<header>
+  🗺️ Editor de Regiones – Cordilleras de España
+  <span>Haz clic para añadir puntos · Enter/botón para guardar · Backspace para deshacer · Esc para limpiar</span>
+</header>
+<div id="main">
+  <div id="map-wrap">
+    <svg id="svg" viewBox="0 0 900 680" preserveAspectRatio="xMidYMid meet">
+      <image id="bg-img" href="/src/assets/espana.jpg" x="0" y="0" width="900" height="680" preserveAspectRatio="none"/>
+      <g id="g-saved"></g>
+      <g id="g-active-fill"></g>
+      <g id="g-lines"></g>
+      <g id="g-preview"></g>
+      <g id="g-pts"></g>
+    </svg>
+  </div>
+  <div id="panel">
+    <div id="panel-head">
+      Selecciona una región y haz clic en el mapa para definir el polígono.<br>
+      <b>Enter</b> o botón "Guardar" para cerrar y guardar.
+    </div>
+    <div id="range-list"></div>
+    <div id="bottom">
+      <div id="status">Sin región activa</div>
+      <div id="coords-display">—</div>
+      <div class="row">
+        <button class="r" id="btn-undo" onclick="undoPoint()" disabled>↩ Deshacer</button>
+        <button class="r" id="btn-clear" onclick="clearPoly()" disabled>✕ Limpiar</button>
+      </div>
+      <div class="row">
+        <button class="g" id="btn-save" onclick="savePoly()" disabled>✓ Guardar región</button>
+      </div>
+      <div class="row">
+        <button class="y" onclick="exportAll()">⬇ Exportar mountainRanges.ts</button>
+      </div>
+      <div id="output"></div>
+    </div>
+  </div>
+</div>
+<script>
+// ─── Data ────────────────────────────────────────────────────────────────────
+const RANGES = [
+  { id:'macizo_galaico',             name:'Macizo Galaico' },
+  { id:'montes_de_leon',             name:'Montes de León' },
+  { id:'teleno',                     name:'Teleno' },
+  { id:'cordillera_cantabrica',      name:'Cordillera Cantábrica' },
+  { id:'montes_vascos',              name:'Montes Vascos' },
+  { id:'pirineos',                   name:'Pirineos' },
+  { id:'sistema_central',            name:'Sistema Central' },
+  { id:'sistema_iberico',            name:'Sistema Ibérico' },
+  { id:'cordillera_costero_catalana',name:'Cordillera Costero Catalana' },
+  { id:'montes_de_toledo',           name:'Montes de Toledo' },
+  { id:'sierra_morena',              name:'Sierra Morena' },
+  { id:'sistemas_beticos',           name:'Sistemas Béticos' },
+]
+
+const COLORS = {
+  macizo_galaico:'#f97316', montes_de_leon:'#eab308', teleno:'#ef4444',
+  cordillera_cantabrica:'#06b6d4', montes_vascos:'#a78bfa', pirineos:'#f472b6',
+  sistema_central:'#34d399', sistema_iberico:'#60a5fa',
+  cordillera_costero_catalana:'#fbbf24', montes_de_toledo:'#a3e635',
+  sierra_morena:'#818cf8', sistemas_beticos:'#2dd4bf',
+}
+
+const HIT_ORDER = [
+  'teleno','montes_de_leon','macizo_galaico','montes_vascos','cordillera_cantabrica',
+  'pirineos','cordillera_costero_catalana','sistema_iberico','sistema_central',
+  'montes_de_toledo','sierra_morena','sistemas_beticos',
+]
+
+// Initial polygon data (current values from mountainRanges.ts)
+const INITIAL = {
+  macizo_galaico:             [[62,34],[178,32],[188,62],[182,125],[162,178],[108,192],[64,165],[56,108],[62,34]],
+  montes_de_leon:             [[124,148],[250,146],[260,178],[256,248],[236,270],[170,268],[138,250],[120,210],[124,148]],
+  teleno:                     [[150,188],[205,185],[212,208],[200,230],[166,228],[146,210],[150,188]],
+  cordillera_cantabrica:      [[84,46],[388,44],[496,50],[510,72],[492,112],[400,134],[268,146],[152,140],[88,124],[74,92],[84,46]],
+  montes_vascos:              [[490,48],[590,46],[605,72],[598,134],[565,154],[508,152],[484,122],[482,70],[490,48]],
+  pirineos:                   [[508,24],[618,20],[718,20],[782,26],[798,48],[788,88],[748,106],[688,108],[588,104],[508,88],[502,52],[508,24]],
+  sistema_central:            [[150,252],[228,236],[372,242],[508,256],[578,280],[574,344],[512,358],[372,362],[232,356],[150,336],[140,296],[150,252]],
+  sistema_iberico:            [[522,122],[576,118],[622,138],[656,186],[670,262],[662,356],[638,418],[596,430],[560,412],[540,352],[534,252],[518,180],[522,122]],
+  cordillera_costero_catalana:[[666,108],[724,114],[760,158],[772,240],[760,328],[722,342],[680,322],[664,258],[658,180],[666,108]],
+  montes_de_toledo:           [[190,332],[315,320],[453,326],[544,346],[547,416],[490,430],[350,432],[240,427],[190,407],[184,368],[190,332]],
+  sierra_morena:              [[100,422],[238,414],[380,416],[522,420],[636,425],[644,454],[603,468],[380,466],[215,461],[100,455],[94,437],[100,422]],
+  sistemas_beticos:           [[258,468],[396,458],[512,460],[630,462],[720,472],[808,488],[826,524],[800,576],[720,618],[580,632],[440,632],[316,618],[246,590],[234,556],[258,468]],
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+// saved: open polygons (without closing repeat of first point)
+const saved = {}
+RANGES.forEach(r => {
+  const pts = INITIAL[r.id] || []
+  // strip closing point if it repeats the first
+  const open = (pts.length > 1 && pts[0][0] === pts[pts.length-1][0] && pts[0][1] === pts[pts.length-1][1])
+    ? pts.slice(0,-1)
+    : [...pts]
+  saved[r.id] = open.map(p => [p[0], p[1]])
+})
+
+let activeId  = null   // which range is being edited
+let pts       = []     // working points (open polygon)
+let cursor    = null   // current SVG mouse position
+
+// ─── SVG helpers ─────────────────────────────────────────────────────────────
+const NS = 'http://www.w3.org/2000/svg'
+const svg = document.getElementById('svg')
+
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag)
+  Object.entries(attrs).forEach(([k,v]) => e.setAttribute(k, v))
+  return e
+}
+
+function svgCoords(e) {
+  const rect = svg.getBoundingClientRect()
+  return [
+    Math.round((e.clientX - rect.left) / rect.width  * 900),
+    Math.round((e.clientY - rect.top)  / rect.height * 680),
+  ]
+}
+
+function centroid(polygon) {
+  if (!polygon.length) return [450, 340]
+  return [
+    Math.round(polygon.reduce((s,p) => s+p[0], 0) / polygon.length),
+    Math.round(polygon.reduce((s,p) => s+p[1], 0) / polygon.length),
+  ]
+}
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+function render() {
+  renderSaved()
+  renderActive()
+  renderPreview()
+  renderPoints()
+  updateUI()
+}
+
+function renderSaved() {
+  const g = document.getElementById('g-saved')
+  g.innerHTML = ''
+  RANGES.forEach(r => {
+    if (r.id === activeId) return
+    const poly = saved[r.id]
+    if (!poly || poly.length < 3) return
+    const color = COLORS[r.id]
+    g.appendChild(el('polygon', {
+      points: poly.map(p => p.join(',')).join(' '),
+      fill: color + '28',
+      stroke: color,
+      'stroke-width': '1',
+    }))
+  })
+}
+
+function renderActive() {
+  const gFill  = document.getElementById('g-active-fill')
+  const gLines = document.getElementById('g-lines')
+  gFill.innerHTML = ''
+  gLines.innerHTML = ''
+  if (!activeId || pts.length < 2) return
+  const color = COLORS[activeId]
+
+  // closed-fill preview (semi)
+  if (pts.length >= 3) {
+    gFill.appendChild(el('polygon', {
+      points: pts.map(p => p.join(',')).join(' '),
+      fill: color + '30',
+      stroke: 'none',
+    }))
+  }
+  // outline
+  gLines.appendChild(el('polyline', {
+    points: pts.map(p => p.join(',')).join(' '),
+    fill: 'none',
+    stroke: color,
+    'stroke-width': '1.5',
+  }))
+  // closing line (dashed)
+  if (pts.length >= 3) {
+    const [fx,fy] = pts[0]
+    const [lx,ly] = pts[pts.length-1]
+    gLines.appendChild(el('line', { x1:lx,y1:ly, x2:fx,y2:fy, stroke:color+'66', 'stroke-width':'1', 'stroke-dasharray':'4,3' }))
+  }
+}
+
+function renderPreview() {
+  const g = document.getElementById('g-preview')
+  g.innerHTML = ''
+  if (!activeId || !cursor || pts.length === 0) return
+  const [lx,ly] = pts[pts.length-1]
+  const [cx,cy] = cursor
+  const color = COLORS[activeId]
+  g.appendChild(el('line', { x1:lx,y1:ly, x2:cx,y2:cy, stroke:color+'99', 'stroke-width':'1', 'stroke-dasharray':'3,2' }))
+}
+
+function renderPoints() {
+  const g = document.getElementById('g-pts')
+  g.innerHTML = ''
+  if (!activeId) return
+  const color = COLORS[activeId]
+  pts.forEach((p, i) => {
+    g.appendChild(el('circle', {
+      cx: p[0], cy: p[1],
+      r: i === 0 ? 4.5 : 3,
+      fill: i === 0 ? '#fff' : color,
+      stroke: '#000', 'stroke-width': '0.8',
+      style: 'pointer-events:none',
+    }))
+  })
+}
+
+// ─── UI ──────────────────────────────────────────────────────────────────────
+function buildList() {
+  const list = document.getElementById('range-list')
+  list.innerHTML = ''
+  RANGES.forEach(r => {
+    const color = COLORS[r.id]
+    const hasPoly = saved[r.id]?.length >= 3
+    const btn = document.createElement('button')
+    btn.className = 'rbtn' + (r.id === activeId ? ' active' : '')
+    btn.innerHTML = `<span class="dot" style="background:${color}"></span>${r.name}${hasPoly ? '<span class="check">✓</span>' : ''}`
+    btn.onclick = () => selectRange(r.id)
+    list.appendChild(btn)
+  })
+}
+
+function updateUI() {
+  buildList()
+  const btnUndo  = document.getElementById('btn-undo')
+  const btnClear = document.getElementById('btn-clear')
+  const btnSave  = document.getElementById('btn-save')
+  const status   = document.getElementById('status')
+  const coords   = document.getElementById('coords-display')
+
+  if (!activeId) {
+    status.textContent = 'Sin región activa'
+    coords.textContent = '—'
+    btnUndo.disabled = btnClear.disabled = btnSave.disabled = true
+    return
+  }
+  const r = RANGES.find(r => r.id === activeId)
+  status.textContent = `${r.name}: ${pts.length} punto${pts.length !== 1 ? 's' : ''}`
+  btnUndo.disabled  = pts.length === 0
+  btnClear.disabled = pts.length === 0
+  btnSave.disabled  = pts.length < 3
+  coords.textContent = pts.length
+    ? pts.map(p => `[${p[0]},${p[1]}]`).join(' ')
+    : '—'
+}
+
+// ─── Actions ─────────────────────────────────────────────────────────────────
+function selectRange(id) {
+  activeId = id
+  pts = saved[id] ? saved[id].map(p => [...p]) : []
+  render()
+}
+
+function addPoint(x, y) {
+  if (!activeId) return
+  pts.push([x, y])
+  render()
+}
+
+function undoPoint() {
+  if (!pts.length) return
+  pts.pop()
+  render()
+}
+
+function clearPoly() {
+  pts = []
+  render()
+}
+
+function savePoly() {
+  if (!activeId || pts.length < 3) return
+  saved[activeId] = pts.map(p => [...p])
+  pts = []
+  render()
+}
+
+function exportAll() {
+  let out = `import type { MountainRange } from '../types/quiz'\n\n`
+  out += `// Coordinates in SVG viewBox units (0 0 900 680)\n`
+  out += `export const MOUNTAIN_RANGES: MountainRange[] = [\n`
+
+  RANGES.forEach(r => {
+    const poly = saved[r.id]?.length >= 3 ? saved[r.id] : (INITIAL[r.id] || [])
+    const c = centroid(poly)
+    // close the polygon (repeat first point)
+    const closed = poly.length >= 3 ? [...poly, poly[0]] : poly
+    out += `  {\n    id: '${r.id}',\n    name: '${r.name}',\n`
+    out += `    centroid: [${c[0]}, ${c[1]}],\n`
+    out += `    polygon: [\n`
+    for (let i = 0; i < closed.length; i += 4) {
+      const chunk = closed.slice(i, i+4).map(p => `[${p[0]},${p[1]}]`).join(', ')
+      out += `      ${chunk},\n`
+    }
+    out += `    ],\n  },\n`
+  })
+
+  out += `]\n\nexport const HIT_TEST_ORDER = [\n`
+  HIT_ORDER.forEach(id => { out += `  '${id}',\n` })
+  out += `]\n`
+
+  const el = document.getElementById('output')
+  el.style.display = 'block'
+  el.textContent = out
+
+  navigator.clipboard?.writeText(out)
+    .then(() => { el.textContent = '✓ ¡Copiado al portapapeles!\n\n' + out })
+    .catch(() => {})
+}
+
+// ─── Events ──────────────────────────────────────────────────────────────────
+svg.addEventListener('click', e => {
+  if (e.detail === 2) return   // ignore double-click (handled by dblclick)
+  if (!activeId) return
+  const [x, y] = svgCoords(e)
+  addPoint(x, y)
+})
+
+svg.addEventListener('dblclick', e => {
+  // double-click: remove the last point added by the second click, then save
+  if (!activeId || pts.length < 3) return
+  pts.pop()  // undo the extra point from the second click
+  savePoly()
+})
+
+svg.addEventListener('mousemove', e => {
+  cursor = svgCoords(e)
+  if (activeId && pts.length > 0) renderPreview()
+})
+
+svg.addEventListener('mouseleave', () => {
+  cursor = null
+  renderPreview()
+})
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter')   { e.preventDefault(); savePoly() }
+  if (e.key === 'Escape')  { e.preventDefault(); clearPoly() }
+  if (e.key === 'Backspace' || (e.key === 'z' && (e.ctrlKey || e.metaKey))) {
+    e.preventDefault()
+    undoPoint()
+  }
+})
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+render()
+</script>
+</body>
+</html>

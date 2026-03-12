@@ -8,7 +8,7 @@ import type { QuestionType } from '../../types/quiz'
 const VIEWBOX_W = 900
 const VIEWBOX_H = 680
 
-type RegionState = 'idle' | 'hover' | 'correct' | 'wrong' | 'reveal' | 'highlight' | 'disabled'
+type RegionState = 'idle' | 'hover' | 'correct' | 'wrong' | 'reveal' | 'highlight' | 'disabled' | 'hint'
 
 interface Props {
   questionType: QuestionType | null
@@ -16,8 +16,10 @@ interface Props {
   selectedId: string | null
   phase: 'question' | 'feedback' | 'complete'
   hoveredId: string | null
+  showHint: boolean
   onHover: (id: string | null) => void
   onTap: (id: string) => void
+  onMiss: () => void
 }
 
 export function MapSvgOverlay({
@@ -26,8 +28,10 @@ export function MapSvgOverlay({
   selectedId,
   phase,
   hoveredId,
+  showHint,
   onHover,
   onTap,
+  onMiss,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -43,6 +47,7 @@ export function MapSvgOverlay({
     }
     if (phase === 'question') {
       if (id === hoveredId) return 'hover'
+      if (showHint) return 'hint'
       return 'idle'
     }
     return 'idle'
@@ -51,10 +56,14 @@ export function MapSvgOverlay({
   function toSvgCoords(clientX: number, clientY: number): [number, number] | null {
     const svg = svgRef.current
     if (!svg) return null
-    const rect = svg.getBoundingClientRect()
-    const px = ((clientX - rect.left) / rect.width) * VIEWBOX_W
-    const py = ((clientY - rect.top) / rect.height) * VIEWBOX_H
-    return [px, py]
+    // Use getScreenCTM so coordinates respect preserveAspectRatio letterboxing
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const svgPt = pt.matrixTransform(ctm.inverse())
+    return [svgPt.x, svgPt.y]
   }
 
   function handlePointerMove(e: React.PointerEvent) {
@@ -84,6 +93,7 @@ export function MapSvgOverlay({
         return
       }
     }
+    onMiss()
   }
 
   function handlePointerLeave() {

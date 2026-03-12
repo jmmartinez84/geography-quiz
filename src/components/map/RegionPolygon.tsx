@@ -1,6 +1,6 @@
 import type { MountainRange } from '../../types/quiz'
 
-type RegionState = 'idle' | 'hover' | 'correct' | 'wrong' | 'reveal' | 'highlight' | 'disabled'
+type RegionState = 'idle' | 'hover' | 'correct' | 'wrong' | 'reveal' | 'highlight' | 'disabled' | 'hint'
 
 interface Props {
   range: MountainRange

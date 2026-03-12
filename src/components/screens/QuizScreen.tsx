@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuiz } from '../../hooks/useQuiz'
 import { MOUNTAIN_RANGES } from '../../data/mountainRanges'
 import { MapSvgOverlay } from '../map/MapSvgOverlay'
@@ -12,6 +12,11 @@ import { ResultScreen } from './ResultScreen'
 export function QuizScreen() {
   const { state, currentQuestion, answer, restart, total } = useQuiz()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [missCount, setMissCount] = useState(0)
+  const showHint = missCount >= 3
+
+  // Reset miss counter on each new question
+  useEffect(() => { setMissCount(0) }, [state.currentIndex])
 
   if (state.phase === 'complete') {
     return <ResultScreen score={state.score} total={total} onRestart={restart} />
@@ -36,8 +41,10 @@ export function QuizScreen() {
             selectedId={state.selectedId}
             phase={state.phase}
             hoveredId={hoveredId}
+            showHint={showHint}
             onHover={setHoveredId}
             onTap={answer}
+            onMiss={() => setMissCount(c => c + 1)}
           />
         </div>
         {/* Feedback overlay on map */}

@@ -131,9 +131,11 @@ export const MOUNTAIN_RANGES: MountainRange[] = [
     id: 'teide',
     name: 'Teide',
     centroid: [95, 632],
+    // Polygon expanded ~12px beyond the visual peak to give a finger-friendly tap target
     polygon: [
-      [84,625], [92,645], [100,640], [105,632],
-      [102,624], [87,624], [84,625],
+      [72,612], [80,648], [95,658], [112,648],
+      [118,632], [112,616], [95,608], [80,612],
+      [72,612],
     ],
   },
 ]
